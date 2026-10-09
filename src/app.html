@@ -1,0 +1,908 @@
+<title>ใบเบิกพัสดุ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600&display=swap">
+<style>
+/* Layout: a data-entry column (form fields, item grid, signers, document settings) beside a live A4 preview.
+   The preview pages are paper: always white with black text, in TH Sarabun at the chosen point size. */
+@font-face { font-family: "THSN"; font-weight: 400; src: url(data:font/ttf;base64,@@FONT_REGULAR@@) format("truetype"); }
+@font-face { font-family: "THSN"; font-weight: 700; src: url(data:font/ttf;base64,@@FONT_BOLD@@) format("truetype"); }
+:root {
+  --bg: #e9ebef;
+  --surface: #ffffff;
+  --surface-2: #f4f6f9;
+  --ink: #15181e;
+  --muted: #5d6471;
+  --line: #d3d8e0;
+  --accent: #2547a8;
+  --accent-ink: #ffffff;
+  --accent-soft: #e7ecfa;
+  --danger: #b4232a;
+  --warn-bg: #fff4d6;
+  --warn-ink: #7a5300;
+  --paper: #ffffff;
+  --paper-ink: #000000;
+  --shadow: 0 1px 2px rgba(20, 28, 48, .08), 0 6px 22px rgba(20, 28, 48, .10);
+  --font-ui: "IBM Plex Sans Thai", "Leelawadee UI", "Thonburi", system-ui, sans-serif;
+  --font-doc: "THSN", "TH SarabunPSK", "TH Sarabun New", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12151b; --surface: #1b1f27; --surface-2: #222833; --ink: #e7e9ee; --muted: #9aa2b0; --line: #343b48;
+    --accent: #86a6ff; --accent-ink: #0d1530; --accent-soft: #24304d; --danger: #ff7b80; --warn-bg: #3a2f12; --warn-ink: #ffd98a;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 6px 22px rgba(0,0,0,.35);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12151b; --surface: #1b1f27; --surface-2: #222833; --ink: #e7e9ee; --muted: #9aa2b0; --line: #343b48;
+  --accent: #86a6ff; --accent-ink: #0d1530; --accent-soft: #24304d; --danger: #ff7b80; --warn-bg: #3a2f12; --warn-ink: #ffd98a;
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 6px 22px rgba(0,0,0,.35);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 400 15px/1.5 var(--font-ui); }
+
+/* ---------- app bar ---------- */
+.appbar {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 10;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px;
+  padding: 10px 16px;
+  background: var(--surface); border-bottom: 1px solid var(--line);
+}
+.appbar h1 { margin: 0 6px 0 0; font-size: 18px; font-weight: 600; }
+.chip { font-size: 13px; color: var(--muted); background: var(--surface-2); border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; font-variant-numeric: tabular-nums; }
+.chip b { color: var(--ink); font-weight: 600; }
+.spacer { flex: 1; }
+.btn {
+  font: 500 14px/1 var(--font-ui); color: var(--ink);
+  background: var(--surface); border: 1px solid var(--line); border-radius: 6px;
+  padding: 9px 13px; cursor: pointer; white-space: nowrap;
+}
+.btn:hover { border-color: var(--accent); color: var(--accent); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn.primary:hover { filter: brightness(1.08); color: var(--accent-ink); }
+.btn.danger:hover { border-color: var(--danger); color: var(--danger); }
+.btn.small { padding: 7px 10px; font-size: 13px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.bar {
+  margin: 12px 16px 0; padding: 10px 14px; border-radius: 8px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+  background: var(--surface); border: 1px solid var(--danger);
+}
+.bar span { margin-right: auto; }
+.toast {
+  position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
+  z-index: 20; max-width: calc(100% - 32px);
+  background: var(--ink); color: var(--surface); border-radius: 8px; padding: 10px 16px; font-size: 14px;
+  box-shadow: var(--shadow);
+}
+
+/* ---------- layout ---------- */
+.layout {
+  display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px;
+  padding-inline: 16px; padding-block: 16px 40px;
+  max-width: 1500px; margin: 0 auto;
+}
+@media (min-width: 1100px) {
+  .layout { grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); align-items: start; }
+  .preview-col { position: sticky; top: 70px; max-height: calc(100vh - 86px); overflow: auto; }
+}
+.editor { display: grid; gap: 14px; min-width: 0; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px 16px; min-width: 0; }
+.card h2 { margin: 0 0 12px; font-size: 15px; font-weight: 600; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.card h2 .sub { font-weight: 400; color: var(--muted); font-size: 13px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px 12px; }
+.f { display: grid; gap: 4px; min-width: 0; }
+.f.wide { grid-column: 1 / -1; }
+.f > span { font-size: 13px; color: var(--muted); }
+.in, select.in, textarea.in {
+  width: 100%; min-width: 0;
+  font: 400 15px/1.4 var(--font-ui); color: var(--ink);
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px;
+  padding: 7px 9px;
+}
+.in:hover { border-color: var(--muted); }
+.in:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px var(--accent-soft); }
+textarea.in { resize: vertical; min-height: 66px; }
+.date-row { display: grid; grid-template-columns: 4.6em minmax(0, 1fr) 5.4em auto; gap: 6px; }
+.check { display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; }
+.check input { width: 17px; height: 17px; accent-color: var(--accent); }
+
+/* items */
+.tools { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.bulk { border: 1px dashed var(--accent); border-radius: 8px; padding: 12px; margin-bottom: 12px; background: var(--accent-soft); display: grid; gap: 8px; }
+.bulk p { margin: 0; font-size: 13px; color: var(--muted); }
+.bulk textarea { min-height: 140px; font-family: var(--font-ui); }
+.bulk .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.bulk .row .found { margin-right: auto; font-size: 13px; }
+.grid-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
+table.items-grid { width: 100%; min-width: 560px; border-collapse: collapse; table-layout: fixed; }
+.items-grid th { position: sticky; top: 0; background: var(--surface-2); font-size: 12.5px; font-weight: 500; color: var(--muted); text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+.items-grid td { border-bottom: 1px solid var(--line); padding: 0; }
+.items-grid tr:last-child td { border-bottom: 0; }
+.items-grid .c-no { width: 2.8em; } .items-grid .c-qty { width: 5.2em; } .items-grid .c-unit { width: 6.4em; } .items-grid .c-note { width: 9.5em; } .items-grid .c-x { width: 2.4em; }
+.items-grid td.no { text-align: center; color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+.items-grid tr.page-start td { border-top: 2px solid var(--accent); }
+.items-grid tr.page-start td.no { color: var(--accent); font-weight: 600; }
+.cell { width: 100%; font: 400 15px/1.3 var(--font-ui); color: var(--ink); background: transparent; border: 0; padding: 8px; }
+.cell:hover { background: var(--surface-2); }
+.cell:focus { background: var(--accent-soft); outline: none; }
+.cell.num { text-align: right; font-variant-numeric: tabular-nums; }
+.x { border: 0; background: none; color: var(--muted); font: 600 16px/1 var(--font-ui); width: 100%; padding: 8px 0; cursor: pointer; opacity: .45; }
+tr:hover .x, .x:focus-visible { opacity: 1; }
+.x:hover { color: var(--danger); }
+.grid-note { font-size: 12.5px; color: var(--muted); margin: 8px 2px 0; }
+
+/* ---------- preview ---------- */
+.preview-col { min-width: 0; }
+.preview-head { display: flex; align-items: baseline; gap: 8px; margin: 2px 2px 10px; flex-wrap: wrap; }
+.preview-head h2 { margin: 0; font-size: 15px; font-weight: 600; }
+.preview-head span { font-size: 13px; color: var(--muted); }
+.pages { display: grid; gap: 14px; }
+.page-wrap { position: relative; width: 100%; }
+.page-label { position: absolute; top: 8px; right: 10px; z-index: 2; font: 500 12px/1 var(--font-ui); padding: 4px 8px; border-radius: 999px; background: var(--warn-bg); color: var(--warn-ink); }
+
+.page {
+  width: 21cm; height: 29.7cm;
+  background: var(--paper); color: var(--paper-ink);
+  box-shadow: var(--shadow);
+  transform-origin: top left;
+  position: absolute; top: 0; left: 0;
+  overflow: hidden;
+  font-family: var(--font-doc);
+}
+.page .body { position: absolute; }
+.p { position: relative; white-space: nowrap; overflow: visible; }
+.p.wrap { white-space: normal; overflow-wrap: anywhere; }
+.p .tab { display: inline-block; height: 1px; vertical-align: baseline; }
+.p .tab.dot {
+  height: 2px;
+  background-image: radial-gradient(circle, currentColor 0 .55px, transparent .8px);
+  background-size: .14cm 2px; background-repeat: repeat-x; background-position: left bottom;
+}
+.doc-table { border-collapse: collapse; table-layout: fixed; }
+.doc-table td { border: .75pt solid var(--paper-ink); padding: 0 .1cm; vertical-align: middle; white-space: nowrap; overflow: hidden; text-overflow: clip; }
+.doc-table td.c { text-align: center; }
+.doc-table td.b { font-weight: 700; }
+
+/* ---------- print the preview pages ---------- */
+@media print {
+  @page { size: A4; margin: 0; }
+  body { background: #fff; }
+  .appbar, .editor, .preview-head, .bar, .toast, .page-label { display: none !important; }
+  .layout { display: block; padding: 0; max-width: none; }
+  .preview-col { position: static; max-height: none; overflow: visible; }
+  .pages { display: block; }
+  .page-wrap { height: auto !important; break-after: page; }
+  .page-wrap:last-child { break-after: auto; }
+  .page { position: relative; transform: none !important; box-shadow: none; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<header class="appbar">
+  <h1>ใบเบิกพัสดุ</h1>
+  <span class="chip"><b id="sum-items">0</b> รายการ · <b id="sum-pages">1</b> แผ่น</span>
+  <span class="spacer"></span>
+  <button class="btn" id="btn-sample" type="button">ใส่ข้อมูลตัวอย่าง</button>
+  <button class="btn danger" id="btn-clear" type="button">ล้างทั้งหมด</button>
+  <button class="btn" id="btn-print" type="button" hidden>พิมพ์</button>
+  <button class="btn primary" id="btn-docx" type="button">ส่งออก Word (.docx)</button>
+</header>
+
+<div class="bar" id="confirm" hidden>
+  <span id="confirm-msg"></span>
+  <button class="btn" id="confirm-no" type="button">ยกเลิก</button>
+  <button class="btn primary" id="confirm-yes" type="button">ยืนยัน</button>
+</div>
+
+<main class="layout">
+  <section class="editor" aria-label="กรอกข้อมูล">
+    <div class="card">
+      <h2>ข้อมูลใบเบิก <span class="sub">พิมพ์ซ้ำที่หัวกระดาษทุกแผ่น</span></h2>
+      <div class="grid">
+        <label class="f"><span>ใบเบิกที่</span><input class="in" id="f-docno" data-k="docno" placeholder="เช่น 12/2569"></label>
+        <div class="f"><span>แผ่นที่</span><label class="check"><input type="checkbox" id="f-autosheet" data-k="autoSheet" checked> ใส่เลขแผ่นให้อัตโนมัติ</label></div>
+        <div class="f wide"><span>วันที่</span>
+          <div class="date-row">
+            <select class="in" id="f-day" data-k="day" aria-label="วันที่"></select>
+            <select class="in" id="f-month" data-k="month" aria-label="เดือน"></select>
+            <input class="in" id="f-year" data-k="year" inputmode="numeric" maxlength="4" aria-label="ปี พ.ศ." placeholder="พ.ศ.">
+            <button class="btn small" id="btn-today" type="button">วันนี้</button>
+          </div>
+        </div>
+        <label class="f"><span>ข้าพเจ้า</span><input class="in" id="f-name" data-k="name" placeholder="ชื่อ–นามสกุล"></label>
+        <label class="f"><span>ตำแหน่ง</span><input class="in" id="f-position" data-k="position"></label>
+        <label class="f"><span>ระดับสายชั้น</span><input class="in" id="f-level" data-k="level"></label>
+        <label class="f wide"><span>เหตุผลในการขอเบิก เพื่อ</span><textarea class="in" id="f-reason" data-k="reason" rows="2"></textarea></label>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>รายการที่ขอเบิก <span class="sub" id="items-sub"></span></h2>
+      <div class="tools">
+        <button class="btn small" id="btn-add" type="button">+ เพิ่มแถว</button>
+        <button class="btn small" id="btn-bulk" type="button">วางหลายรายการพร้อมกัน</button>
+        <button class="btn small danger" id="btn-clear-items" type="button">ลบรายการทั้งหมด</button>
+      </div>
+      <div class="bulk" id="bulk" hidden>
+        <p>วางจาก Excel / Google Sheets (คอลัมน์ รายการ · จำนวน · หน่วย · หมายเหตุ) หรือพิมพ์บรรทัดละ 1 รายการ เช่น <b>กระดาษ A4 80 แกรม 5 รีม</b></p>
+        <textarea class="in" id="bulk-text" aria-label="รายการที่จะเพิ่ม" placeholder="กระดาษ A4 80 แกรม 5 รีม&#10;ปากกาลูกลื่น สีน้ำเงิน 2 กล่อง&#10;แฟ้มสันกว้าง 3 นิ้ว 10 เล่ม"></textarea>
+        <div class="row">
+          <span class="found" id="bulk-found">ยังไม่มีรายการ</span>
+          <button class="btn small" id="bulk-cancel" type="button">ยกเลิก</button>
+          <button class="btn small primary" id="bulk-add" type="button">เพิ่มเข้าตาราง</button>
+        </div>
+      </div>
+      <div class="grid-wrap">
+        <table class="items-grid" aria-label="รายการพัสดุ">
+          <colgroup><col class="c-no"><col><col class="c-qty"><col class="c-unit"><col class="c-note"><col class="c-x"></colgroup>
+          <thead><tr><th>ที่</th><th>รายการ</th><th>จำนวน</th><th>หน่วย</th><th>หมายเหตุ</th><th><span hidden>ลบ</span></th></tr></thead>
+          <tbody id="grid"></tbody>
+        </table>
+      </div>
+      <p class="grid-note">Enter = ลงแถวถัดไป · วางข้อมูลหลายบรรทัดลงในช่องไหนก็ได้ จะเติมลงแถวต่อ ๆ ไปให้เอง · เส้นสีน้ำเงินคือจุดขึ้นแผ่นใหม่</p>
+    </div>
+
+    <div class="card">
+      <h2>ผู้ลงนาม <span class="sub">ชื่อในวงเล็บใต้ลายมือชื่อ ว่างไว้ได้ถ้าจะเขียนเอง</span></h2>
+      <div class="grid">
+        <label class="f"><span>หัวหน้ากลุ่มสาระฯ</span><input class="in" id="s-head" data-k="s_head"></label>
+        <label class="f"><span>เจ้าหน้าที่พัสดุ</span><input class="in" id="s-officer" data-k="s_officer"></label>
+        <label class="f"><span>ผู้รับของ</span><input class="in" id="s-receiver" data-k="s_receiver"></label>
+        <label class="f"><span>หัวหน้าหน่วยพัสดุ (อนุญาต)</span><input class="in" id="s-chief" data-k="s_chief"></label>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>รูปแบบเอกสาร</h2>
+      <div class="grid">
+        <label class="f"><span>ฟอนต์ในไฟล์ Word</span>
+          <select class="in" id="o-font" data-k="font">
+            <option>TH SarabunPSK</option>
+            <option>TH Sarabun New</option>
+            <option>TH SarabunIT๙</option>
+          </select>
+        </label>
+        <label class="f"><span>ขนาดตัวอักษร</span>
+          <select class="in" id="o-size" data-k="size">
+            <option value="14">14 พอยต์</option>
+            <option value="15">15 พอยต์</option>
+            <option value="16">16 พอยต์</option>
+          </select>
+        </label>
+        <label class="f"><span>จำนวนแถวต่อแผ่น</span><input class="in" id="o-per" data-k="perPage" type="number" min="5" max="30" inputmode="numeric"></label>
+      </div>
+    </div>
+  </section>
+
+  <section class="preview-col" aria-label="ตัวอย่างเอกสาร">
+    <div class="preview-head"><h2>ตัวอย่างเอกสาร</h2><span id="preview-sub">หัวกระดาษและช่องลงนามพิมพ์ซ้ำทุกแผ่น</span></div>
+    <div class="pages" id="pages"></div>
+  </section>
+</main>
+
+<div class="toast" id="toast" role="status" hidden></div>
+
+<datalist id="dl-items"></datalist>
+<datalist id="dl-units">
+  <option value="รีม"></option><option value="กล่อง"></option><option value="ด้าม"></option><option value="เล่ม"></option>
+  <option value="ม้วน"></option><option value="ตลับ"></option><option value="อัน"></option><option value="ชิ้น"></option>
+  <option value="แพ็ค"></option><option value="ห่อ"></option><option value="โหล"></option><option value="ชุด"></option>
+  <option value="แผ่น"></option><option value="ขวด"></option><option value="หลอด"></option><option value="ก้อน"></option>
+  <option value="ถุง"></option><option value="แท่ง"></option><option value="เครื่อง"></option><option value="ใบ"></option>
+</datalist>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ================= state ================= */
+  var KEY = "itemlist-requisition-v2";
+  var CAT_KEY = "itemlist-catalog-v1";
+  var MONTHS = ["มกราคม","กุมภาพันธ์","มีนาคม","เมษายน","พฤษภาคม","มิถุนายน","กรกฎาคม","สิงหาคม","กันยายน","ตุลาคม","พฤศจิกายน","ธันวาคม"];
+  var TEXT_KEYS = ["docno","day","month","year","name","position","level","reason","s_head","s_officer","s_receiver","s_chief"];
+
+  function defaults() {
+    var now = new Date();
+    return {
+      docno: "", autoSheet: true,
+      day: String(now.getDate()), month: String(now.getMonth() + 1), year: String(now.getFullYear() + 543),
+      name: "", position: "", level: "", reason: "",
+      s_head: "", s_officer: "", s_receiver: "", s_chief: "",
+      items: [],
+      font: "TH SarabunPSK", size: 16, perPage: 20
+    };
+  }
+  var st = defaults();
+
+  function load() {
+    try {
+      var s = JSON.parse(localStorage.getItem(KEY) || "null");
+      if (s && typeof s === "object") st = Object.assign(defaults(), s);
+    } catch (e) {}
+    st.items = (st.items || []).map(normItem);
+  }
+  var saveT;
+  function save() {
+    clearTimeout(saveT);
+    saveT = setTimeout(function () { try { localStorage.setItem(KEY, JSON.stringify(st)); } catch (e) {} }, 300);
+  }
+  function normItem(r) { r = r || {}; return { item: String(r.item || ""), qty: String(r.qty || ""), unit: String(r.unit || ""), note: String(r.note || "") }; }
+  function filled(r) { return !!(r.item.trim() || r.qty.trim() || r.unit.trim() || r.note.trim()); }
+  function filledItems() { return st.items.filter(filled); }
+  function perPage() { var n = parseInt(st.perPage, 10); return isFinite(n) ? Math.min(30, Math.max(5, n)) : 20; }
+
+  /* ================= catalog (autocomplete from past entries) ================= */
+  var catalog = {};
+  try { catalog = JSON.parse(localStorage.getItem(CAT_KEY) || "{}") || {}; } catch (e) { catalog = {}; }
+  function remember() {
+    filledItems().forEach(function (r) { var k = r.item.trim(); if (k) catalog[k] = r.unit.trim() || catalog[k] || ""; });
+    var keys = Object.keys(catalog);
+    if (keys.length > 400) keys.slice(0, keys.length - 400).forEach(function (k) { delete catalog[k]; });
+    try { localStorage.setItem(CAT_KEY, JSON.stringify(catalog)); } catch (e) {}
+    fillDatalist();
+  }
+  function fillDatalist() {
+    var dl = document.getElementById("dl-items");
+    dl.innerHTML = "";
+    Object.keys(catalog).sort().forEach(function (k) { var o = document.createElement("option"); o.value = k; dl.appendChild(o); });
+  }
+
+  /* ================= text measuring (cm) ================= */
+  var CM = 96 / 2.54;
+  var ctx = document.createElement("canvas").getContext("2d");
+  function tw(text, pt, bold) {
+    ctx.font = (bold ? "700 " : "400 ") + pt + "pt THSN";
+    return ctx.measureText(text).width / CM;
+  }
+
+  /* ================= document model =================
+     A page is a list of blocks. Paragraph: {type:"p", runs:[{text,b,pt}|{tab:true}], tabs:[{pos,align,leader}], before, line, wrap}
+     Table: {type:"table", cols:[cm], rowH, rows:[[{text,c,b}]]}. Units are cm and pt; the same model feeds the preview and the .docx. */
+  var PAGE = { w: 21, h: 29.7, top: 1.3, bottom: 1.0, left: 1.8, right: 1.2 };
+  var W = PAGE.w - PAGE.left - PAGE.right; // 18 cm
+
+  function P(o) { return Object.assign({ type: "p", runs: [], tabs: [], before: 0, line: 0.8, wrap: false }, o || {}); }
+  function txt(p, s, o) { p.runs.push({ text: s, b: !!(o && o.b), pt: o && o.pt }); }
+  function tab(p, pos, align, leader) { p.tabs.push({ pos: pos, align: align || "left", leader: leader || "" }); p.runs.push({ tab: true }); }
+  // a field prints its value as plain text, or a dotted leader to `stop` when empty
+  function field(p, value, stop) { value = (value || "").trim(); if (value) txt(p, value); else tab(p, stop, "left", "dot"); }
+
+  function buildPages() {
+    var pt = Number(st.size) || 16, k = pt / 16;
+    var line = +(pt * 0.05).toFixed(3), rowH = +(pt * 0.047).toFixed(3), titlePt = pt + 2;
+    var items = filledItems(), per = perPage();
+    var nPages = Math.max(1, Math.ceil(items.length / per));
+    var monthName = MONTHS[(parseInt(st.month, 10) || 0) - 1] || "";
+
+    // header geometry
+    var sheetLbl = "แผ่นที่ ", sheetStart = W - 1.6 * k - tw(sheetLbl, pt);
+    var dParts = [tw("วันที่ ", pt), 1.3 * k, tw(" เดือน ", pt), 3.0 * k, tw(" พ.ศ. ", pt), 1.8 * k];
+    var dStart = W - dParts.reduce(function (a, b) { return a + b; }, 0);
+    var indent = 1.25 * k;
+    var nameLbl = tw("ข้าพเจ้า ", pt), posLbl = tw(" ตำแหน่ง ", pt), lvLbl = tw(" ระดับสายชั้น ", pt);
+    var free = W - indent - nameLbl - posLbl - lvLbl;
+    var nameEnd = indent + nameLbl + free * 0.45, posEnd = nameEnd + posLbl + free * 0.32;
+    var reasonLbl = "ขอเบิกสิ่งของดังรายการต่อไปนี้ และเหตุผลในการขอเบิก เพื่อ ";
+
+    // table geometry
+    var noW = 0.9 * k, qtyW = Math.max(2.4, tw("จำนวนหน่วย", pt, true) + 0.4), noteW = 4.4 * k;
+    var itemW = W - noW - qtyW - noteW;
+
+    // signature geometry: two columns, role after the dotted signing line
+    var colW = W / 2, signLbl = tw("ลงชื่อ ", pt);
+    var L0 = 0, R0 = colW + 0.2;
+    var Ld = colW - 0.25 - Math.max(tw("หัวหน้ากลุ่มสาระฯ", pt), tw("ผู้รับของ", pt));
+    var Rd = W - 0.1 - Math.max(tw("เจ้าหน้าที่พัสดุ", pt), tw("หัวหน้าหน่วยพัสดุ", pt));
+    var nameSpan = function (x0, dEnd) { var a = x0 + signLbl * 0.5, b = dEnd + 0.2; return { open: a, close: b, mid: (a + b) / 2 }; };
+    var LN = nameSpan(L0, Ld), RN = nameSpan(R0, Rd);
+
+    function signRow(before, leftRole, rightRole) {
+      var p = P({ before: before, line: line });
+      txt(p, "ลงชื่อ "); tab(p, Ld, "left", "dot"); txt(p, leftRole);
+      tab(p, R0); txt(p, "ลงชื่อ "); tab(p, Rd, "left", "dot"); txt(p, rightRole);
+      return p;
+    }
+    function nameRow(left, right) {
+      var p = P({ line: line });
+      [[left, LN], [right, RN]].forEach(function (pair) {
+        var v = (pair[0] || "").trim(), g = pair[1];
+        if (v) { tab(p, g.mid, "center"); txt(p, "(" + v + ")"); }
+        else { tab(p, g.open); txt(p, "("); tab(p, g.close, "left", "dot"); txt(p, ")"); }
+      });
+      return p;
+    }
+
+    var pages = [];
+    for (var pg = 0; pg < nPages; pg++) {
+      var blocks = [], p;
+      // line 1: ใบเบิกที่ / title / แผ่นที่
+      p = P({ line: Math.max(line, titlePt * 0.05) });
+      txt(p, "ใบเบิกที่ "); field(p, st.docno, tw("ใบเบิกที่ ", pt) + 2.0 * k);
+      tab(p, W / 2, "center"); txt(p, "ใบเบิกพัสดุ", { b: true, pt: titlePt });
+      tab(p, sheetStart); txt(p, sheetLbl); field(p, st.autoSheet ? String(pg + 1) : "", W);
+      blocks.push(p);
+      // line 2: date, right side
+      p = P({ before: 0.15, line: line });
+      var x = dStart;
+      tab(p, x); txt(p, "วันที่ "); x += dParts[0] + dParts[1]; field(p, st.day, x);
+      txt(p, " เดือน "); x += dParts[2] + dParts[3]; field(p, monthName, x);
+      txt(p, " พ.ศ. "); field(p, st.year, W);
+      blocks.push(p);
+      // line 3: requester
+      p = P({ before: 0.15, line: line });
+      tab(p, indent); txt(p, "ข้าพเจ้า "); field(p, st.name, nameEnd);
+      txt(p, " ตำแหน่ง "); field(p, st.position, posEnd);
+      txt(p, " ระดับสายชั้น "); field(p, st.level, W);
+      blocks.push(p);
+      // lines 4–6: reason
+      var reason = (st.reason || "").replace(/\s*\n\s*/g, " ").trim();
+      if (reason) {
+        p = P({ before: 0.1, line: line, wrap: true }); txt(p, reasonLbl + reason); blocks.push(p);
+      } else {
+        p = P({ before: 0.1, line: line }); txt(p, reasonLbl); tab(p, W, "left", "dot"); blocks.push(p);
+        for (var r = 0; r < 2; r++) { p = P({ line: line }); tab(p, W, "left", "dot"); blocks.push(p); }
+      }
+      // items table
+      var rows = [[{ text: "ที่", c: true, b: true }, { text: "รายการ", c: true, b: true }, { text: "จำนวนหน่วย", c: true, b: true }, { text: "หมายเหตุ", c: true, b: true }]];
+      for (var i = 0; i < per; i++) {
+        var gi = pg * per + i, it = items[gi];
+        if (it) rows.push([{ text: String(gi + 1), c: true }, { text: it.item.trim() }, { text: [it.qty.trim(), it.unit.trim()].filter(Boolean).join(" "), c: true }, { text: it.note.trim() }]);
+        else rows.push([{ text: "" }, { text: "" }, { text: "" }, { text: "" }]);
+      }
+      blocks.push({ type: "table", before: 0.25, cols: [noW, itemW, qtyW, noteW], rowH: rowH, rows: rows });
+      // signatures
+      blocks.push(signRow(0.7, "หัวหน้ากลุ่มสาระฯ", "เจ้าหน้าที่พัสดุ"));
+      blocks.push(nameRow(st.s_head, st.s_officer));
+      p = P({ before: 0.15, line: line }); tab(p, (R0 + signLbl + Rd) / 2, "center"); txt(p, "อนุญาต", { b: true }); blocks.push(p);
+      blocks.push(signRow(0.3, "ผู้รับของ", "หัวหน้าหน่วยพัสดุ"));
+      blocks.push(nameRow(st.s_receiver, st.s_chief));
+      pages.push(blocks);
+    }
+    return { pages: pages, pt: pt, items: items.length };
+  }
+
+  /* ================= preview renderer ================= */
+  var pagesEl = document.getElementById("pages");
+  function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+
+  function paraHTML(p, pt) {
+    var h = '<div class="p' + (p.wrap ? " wrap" : "") + '" style="margin-top:' + p.before + "cm;line-height:" + p.line + "cm;" + (p.wrap ? "" : "height:" + p.line + "cm;") + '">';
+    var seg = "";
+    var flush = function () { h += '<span class="seg">' + seg + "</span>"; seg = ""; };
+    p.runs.forEach(function (r) {
+      if (r.tab) { flush(); h += '<span class="tab"></span>'; }
+      else seg += '<span style="' + (r.b ? "font-weight:700;" : "") + (r.pt ? "font-size:" + r.pt + "pt;" : "") + '">' + esc(r.text) + "</span>";
+    });
+    flush();
+    return h + "</div>";
+  }
+  function tableHTML(t) {
+    var h = '<table class="doc-table" style="margin-top:' + t.before + 'cm;width:' + W + 'cm"><colgroup>';
+    t.cols.forEach(function (c) { h += '<col style="width:' + c + 'cm">'; });
+    h += "</colgroup>";
+    t.rows.forEach(function (row) {
+      h += '<tr style="height:' + t.rowH + 'cm">';
+      row.forEach(function (c) { h += '<td class="' + (c.c ? "c " : "") + (c.b ? "b" : "") + '" style="height:' + t.rowH + "cm;line-height:" + t.rowH + 'cm">' + esc(c.text) + "</td>"; });
+      h += "</tr>";
+    });
+    return h + "</table>";
+  }
+
+  // lay out tab stops like Word: each tab runs to the next stop past the pen position
+  function layoutTabs(pEl, p) {
+    var tabs = pEl.querySelectorAll(":scope > .tab");
+    var segs = pEl.querySelectorAll(":scope > .seg");
+    var stops = p.tabs.slice().sort(function (a, b) { return a.pos - b.pos; });
+    tabs.forEach(function (t, i) {
+      var x = t.offsetLeft, stop = null;
+      // stops of filled-in fields are never emitted, so the first stop right of the pen is the intended one
+      for (var j = 0; j < stops.length; j++) if (stops[j].pos * CM > x + 0.5) { stop = stops[j]; break; }
+      if (!stop) { t.style.width = "0.3cm"; return; }
+      var next = segs[i + 1], sw = next ? next.offsetWidth : 0;
+      var w = stop.pos * CM - x;
+      if (stop.align === "center") w -= sw / 2;
+      if (stop.align === "right") w -= sw;
+      t.style.width = Math.max(0, w) + "px";
+      t.className = "tab" + (stop.leader === "dot" ? " dot" : "");
+    });
+  }
+  var lastModel = null;
+  function renderPreview() {
+    var m = buildPages();
+    lastModel = m;
+    var html = "";
+    m.pages.forEach(function (blocks, i) {
+      html += '<div class="page-wrap" data-i="' + i + '"><span class="page-label" hidden></span><div class="page" style="font-size:' + m.pt + 'pt">' +
+        '<div class="body" style="top:' + PAGE.top + "cm;left:" + PAGE.left + "cm;width:" + W + 'cm">';
+      blocks.forEach(function (b) { html += b.type === "p" ? paraHTML(b, m.pt) : tableHTML(b); });
+      html += "</div></div></div>";
+    });
+    pagesEl.innerHTML = html;
+    var pEls = pagesEl.querySelectorAll(".page");
+    pEls.forEach(function (pageEl, i) {
+      var paras = pageEl.querySelectorAll(".p");
+      var models = m.pages[i].filter(function (b) { return b.type === "p"; });
+      paras.forEach(function (el, j) { layoutTabs(el, models[j]); });
+      // overflow check against the printable height
+      var body = pageEl.querySelector(".body");
+      var limit = (PAGE.h - PAGE.top - PAGE.bottom - 0.3) * CM; // keep a little slack: Word and the browser round lines differently
+      var label = pageEl.parentNode.querySelector(".page-label");
+      if (body.offsetHeight > limit + 1) { label.hidden = false; label.textContent = "แผ่นที่ " + (i + 1) + " ล้นหน้า · ลดจำนวนแถวต่อแผ่น"; }
+    });
+    fitPages();
+    document.getElementById("sum-items").textContent = m.items;
+    document.getElementById("sum-pages").textContent = m.pages.length;
+    document.getElementById("items-sub").textContent = m.items + " รายการ · " + m.pages.length + " แผ่น (แผ่นละ " + perPage() + " แถว)";
+  }
+  function fitPages() {
+    var wraps = pagesEl.querySelectorAll(".page-wrap");
+    if (!wraps.length) return;
+    var avail = pagesEl.clientWidth, s = Math.min(1, avail / (PAGE.w * CM));
+    wraps.forEach(function (w) {
+      w.style.height = PAGE.h * CM * s + "px";
+      w.querySelector(".page").style.transform = "scale(" + s + ")";
+    });
+  }
+  var renderT;
+  function schedule() { clearTimeout(renderT); renderT = setTimeout(renderPreview, 120); }
+  window.addEventListener("resize", fitPages);
+
+  /* ================= .docx writer ================= */
+  var TW = 1440 / 2.54; // twips per cm
+  function twp(cm) { return Math.round(cm * TW); }
+  function x(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+  function rPr(font, pt, b) {
+    var f = x(font);
+    return "<w:rPr><w:rFonts w:ascii=\"" + f + "\" w:hAnsi=\"" + f + "\" w:cs=\"" + f + "\" w:eastAsia=\"" + f + "\"/>" +
+      (b ? "<w:b/><w:bCs/>" : "") + "<w:sz w:val=\"" + pt * 2 + "\"/><w:szCs w:val=\"" + pt * 2 + "\"/></w:rPr>";
+  }
+  function pXml(p, font, pt, pageBreak) {
+    var stops = p.tabs.slice().sort(function (a, b) { return a.pos - b.pos; });
+    var h = "<w:p><w:pPr>" + (pageBreak ? "<w:pageBreakBefore/>" : "");
+    if (stops.length) {
+      h += "<w:tabs>";
+      stops.forEach(function (t) { h += "<w:tab w:val=\"" + t.align + "\" w:leader=\"" + (t.leader === "dot" ? "dot" : "none") + "\" w:pos=\"" + twp(t.pos) + "\"/>"; });
+      h += "</w:tabs>";
+    }
+    h += "<w:spacing w:before=\"" + twp(p.before) + "\" w:after=\"0\" w:line=\"" + twp(p.line) + "\" w:lineRule=\"exact\"/>" + rPr(font, pt, false) + "</w:pPr>";
+    p.runs.forEach(function (r) {
+      if (r.tab) h += "<w:r>" + rPr(font, pt, false) + "<w:tab/></w:r>";
+      else h += "<w:r>" + rPr(font, r.pt || pt, r.b) + "<w:t xml:space=\"preserve\">" + x(r.text) + "</w:t></w:r>";
+    });
+    return h + "</w:p>";
+  }
+  function tblXml(t, font, pt) {
+    var border = "w:val=\"single\" w:sz=\"6\" w:space=\"0\" w:color=\"000000\"";
+    var h = "<w:p><w:pPr><w:spacing w:before=\"0\" w:after=\"0\" w:line=\"" + twp(t.before) + "\" w:lineRule=\"exact\"/></w:pPr></w:p>";
+    h += "<w:tbl><w:tblPr><w:tblW w:w=\"" + twp(W) + "\" w:type=\"dxa\"/><w:tblInd w:w=\"0\" w:type=\"dxa\"/>" +
+      "<w:tblBorders><w:top " + border + "/><w:left " + border + "/><w:bottom " + border + "/><w:right " + border + "/><w:insideH " + border + "/><w:insideV " + border + "/></w:tblBorders><w:tblLayout w:type=\"fixed\"/>" +
+      "<w:tblCellMar><w:top w:w=\"0\" w:type=\"dxa\"/><w:left w:w=\"57\" w:type=\"dxa\"/><w:bottom w:w=\"0\" w:type=\"dxa\"/><w:right w:w=\"57\" w:type=\"dxa\"/></w:tblCellMar></w:tblPr><w:tblGrid>";
+    t.cols.forEach(function (c) { h += "<w:gridCol w:w=\"" + twp(c) + "\"/>"; });
+    h += "</w:tblGrid>";
+    t.rows.forEach(function (row, ri) {
+      h += "<w:tr><w:trPr><w:cantSplit/>" + (ri === 0 ? "<w:tblHeader/>" : "") + "<w:trHeight w:val=\"" + twp(t.rowH) + "\" w:hRule=\"exact\"/></w:trPr>";
+      row.forEach(function (c, ci) {
+        h += "<w:tc><w:tcPr><w:tcW w:w=\"" + twp(t.cols[ci]) + "\" w:type=\"dxa\"/><w:vAlign w:val=\"center\"/></w:tcPr><w:p><w:pPr>" +
+          "<w:spacing w:before=\"0\" w:after=\"0\" w:line=\"" + twp(t.rowH) + "\" w:lineRule=\"exact\"/>" + (c.c ? "<w:jc w:val=\"center\"/>" : "") + rPr(font, pt, c.b) + "</w:pPr>" +
+          (c.text ? "<w:r>" + rPr(font, pt, c.b) + "<w:t xml:space=\"preserve\">" + x(c.text) + "</w:t></w:r>" : "") + "</w:p></w:tc>";
+      });
+      h += "</w:tr>";
+    });
+    return h + "</w:tbl>";
+  }
+  function buildDocx() {
+    var m = buildPages(), font = st.font || "TH SarabunPSK", pt = m.pt;
+    var body = "";
+    m.pages.forEach(function (blocks, pi) {
+      blocks.forEach(function (b, bi) {
+        if (b.type === "p") body += pXml(b, font, pt, pi > 0 && bi === 0);
+        else body += tblXml(b, font, pt);
+      });
+    });
+    var W_NS = "xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\"";
+    var doc = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><w:document " + W_NS + "><w:body>" + body +
+      "<w:sectPr><w:pgSz w:w=\"" + twp(PAGE.w) + "\" w:h=\"" + twp(PAGE.h) + "\"/><w:pgMar w:top=\"" + twp(PAGE.top) + "\" w:right=\"" + twp(PAGE.right) +
+      "\" w:bottom=\"" + twp(PAGE.bottom) + "\" w:left=\"" + twp(PAGE.left) + "\" w:header=\"425\" w:footer=\"425\" w:gutter=\"0\"/></w:sectPr></w:body></w:document>";
+    var styles = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><w:styles " + W_NS + "><w:docDefaults><w:rPrDefault>" + rPr(font, pt, false).replace("</w:rPr>", "<w:lang w:val=\"th-TH\" w:eastAsia=\"th-TH\" w:bidi=\"th-TH\"/></w:rPr>") +
+      "</w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:after=\"0\" w:line=\"240\" w:lineRule=\"auto\"/></w:pPr></w:pPrDefault></w:docDefaults>" +
+      "<w:style w:type=\"paragraph\" w:default=\"1\" w:styleId=\"Normal\"><w:name w:val=\"Normal\"/><w:qFormat/></w:style>" +
+      "<w:style w:type=\"table\" w:default=\"1\" w:styleId=\"TableNormal\"><w:name w:val=\"Normal Table\"/><w:tblPr><w:tblInd w:w=\"0\" w:type=\"dxa\"/><w:tblCellMar><w:top w:w=\"0\" w:type=\"dxa\"/><w:left w:w=\"108\" w:type=\"dxa\"/><w:bottom w:w=\"0\" w:type=\"dxa\"/><w:right w:w=\"108\" w:type=\"dxa\"/></w:tblCellMar></w:tblPr></w:style></w:styles>";
+    var settings = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><w:settings " + W_NS + "><w:defaultTabStop w:val=\"720\"/><w:characterSpacingControl w:val=\"doNotCompress\"/>" +
+      "<w:compat><w:compatSetting w:name=\"compatibilityMode\" w:uri=\"http://schemas.microsoft.com/office/word\" w:val=\"15\"/></w:compat></w:settings>";
+    var ct = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">" +
+      "<Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/><Default Extension=\"xml\" ContentType=\"application/xml\"/>" +
+      "<Override PartName=\"/word/document.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml\"/>" +
+      "<Override PartName=\"/word/styles.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml\"/>" +
+      "<Override PartName=\"/word/settings.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml\"/>" +
+      "<Override PartName=\"/docProps/core.xml\" ContentType=\"application/vnd.openxmlformats-package.core-properties+xml\"/></Types>";
+    var rels = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">" +
+      "<Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" Target=\"word/document.xml\"/>" +
+      "<Relationship Id=\"rId2\" Type=\"http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties\" Target=\"docProps/core.xml\"/></Relationships>";
+    var docRels = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">" +
+      "<Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles\" Target=\"styles.xml\"/>" +
+      "<Relationship Id=\"rId2\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings\" Target=\"settings.xml\"/></Relationships>";
+    var core = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><cp:coreProperties xmlns:cp=\"http://schemas.openxmlformats.org/package/2006/metadata/core-properties\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:dcterms=\"http://purl.org/dc/terms/\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\">" +
+      "<dc:title>ใบเบิกพัสดุ" + (st.docno ? " " + x(st.docno) : "") + "</dc:title><dcterms:created xsi:type=\"dcterms:W3CDTF\">" + new Date().toISOString().replace(/\.\d+Z$/, "Z") + "</dcterms:created></cp:coreProperties>";
+    var enc = new TextEncoder();
+    return zipStore([
+      { name: "[Content_Types].xml", data: enc.encode(ct) },
+      { name: "_rels/.rels", data: enc.encode(rels) },
+      { name: "docProps/core.xml", data: enc.encode(core) },
+      { name: "word/document.xml", data: enc.encode(doc) },
+      { name: "word/styles.xml", data: enc.encode(styles) },
+      { name: "word/settings.xml", data: enc.encode(settings) },
+      { name: "word/_rels/document.xml.rels", data: enc.encode(docRels) }
+    ]);
+  }
+
+  // minimal ZIP (stored, no compression) — enough for a .docx
+  var CRC = (function () { var t = new Uint32Array(256); for (var n = 0; n < 256; n++) { var c = n; for (var k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+  function crc32(d) { var c = 0xFFFFFFFF; for (var i = 0; i < d.length; i++) c = CRC[(c ^ d[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+  function zipStore(files) {
+    var enc = new TextEncoder(), parts = [], central = [], off = 0;
+    var now = new Date();
+    var dosTime = (now.getHours() << 11) | (now.getMinutes() << 5) | (now.getSeconds() >> 1);
+    var dosDate = ((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate();
+    files.forEach(function (f) {
+      var name = enc.encode(f.name), crc = crc32(f.data), size = f.data.length;
+      var lh = new DataView(new ArrayBuffer(30));
+      lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true); lh.setUint16(8, 0, true);
+      lh.setUint16(10, dosTime, true); lh.setUint16(12, dosDate, true); lh.setUint32(14, crc, true);
+      lh.setUint32(18, size, true); lh.setUint32(22, size, true); lh.setUint16(26, name.length, true); lh.setUint16(28, 0, true);
+      parts.push(new Uint8Array(lh.buffer), name, f.data);
+      var ch = new DataView(new ArrayBuffer(46));
+      ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true); ch.setUint16(8, 0x0800, true); ch.setUint16(10, 0, true);
+      ch.setUint16(12, dosTime, true); ch.setUint16(14, dosDate, true); ch.setUint32(16, crc, true); ch.setUint32(20, size, true); ch.setUint32(24, size, true);
+      ch.setUint16(28, name.length, true); ch.setUint16(30, 0, true); ch.setUint16(32, 0, true); ch.setUint16(34, 0, true); ch.setUint16(36, 0, true);
+      ch.setUint32(38, 0, true); ch.setUint32(42, off, true);
+      central.push(new Uint8Array(ch.buffer), name);
+      off += 30 + name.length + size;
+    });
+    var cSize = central.reduce(function (a, b) { return a + b.length; }, 0);
+    var end = new DataView(new ArrayBuffer(22));
+    end.setUint32(0, 0x06054b50, true); end.setUint16(8, files.length, true); end.setUint16(10, files.length, true);
+    end.setUint32(12, cSize, true); end.setUint32(16, off, true);
+    var all = parts.concat(central, [new Uint8Array(end.buffer)]);
+    var out = new Uint8Array(all.reduce(function (a, b) { return a + b.length; }, 0)), p = 0;
+    all.forEach(function (b) { out.set(b, p); p += b.length; });
+    return out;
+  }
+
+  /* ================= editor: header fields ================= */
+  var daySel = document.getElementById("f-day"), monthSel = document.getElementById("f-month");
+  daySel.appendChild(new Option("วัน", ""));
+  for (var d = 1; d <= 31; d++) daySel.appendChild(new Option(String(d), String(d)));
+  monthSel.appendChild(new Option("เดือน", ""));
+  MONTHS.forEach(function (m, i) { monthSel.appendChild(new Option(m, String(i + 1))); });
+
+  var boundEls = document.querySelectorAll("[data-k]");
+  function fillForm() {
+    boundEls.forEach(function (el) {
+      var k = el.dataset.k;
+      if (el.type === "checkbox") el.checked = !!st[k];
+      else el.value = st[k] != null ? st[k] : "";
+    });
+  }
+  boundEls.forEach(function (el) {
+    var ev = el.tagName === "SELECT" || el.type === "checkbox" ? "change" : "input";
+    el.addEventListener(ev, function () {
+      var k = el.dataset.k;
+      st[k] = el.type === "checkbox" ? el.checked : el.value;
+      if (k === "perPage") renderGrid();
+      save(); schedule();
+    });
+  });
+  document.getElementById("f-name").addEventListener("blur", function () {
+    if (!st.s_receiver.trim() && st.name.trim()) { st.s_receiver = st.name.trim(); document.getElementById("s-receiver").value = st.s_receiver; save(); schedule(); }
+  });
+  document.getElementById("btn-today").addEventListener("click", function () {
+    var t = defaults(); st.day = t.day; st.month = t.month; st.year = t.year; fillForm(); save(); schedule();
+  });
+
+  /* ================= editor: item grid ================= */
+  var grid = document.getElementById("grid");
+  function ensureSpare() { if (!st.items.length || filled(st.items[st.items.length - 1])) st.items.push(normItem()); }
+  function renderGrid(focusId, caret) {
+    ensureSpare();
+    var per = perPage(), h = "";
+    st.items.forEach(function (r, i) {
+      h += '<tr data-i="' + i + '"' + (i > 0 && i % per === 0 ? ' class="page-start" title="ขึ้นแผ่นที่ ' + (i / per + 1) + '"' : "") + ">" +
+        '<td class="no">' + (i + 1) + "</td>" +
+        '<td><input class="cell" id="g' + i + '-item" data-c="item" list="dl-items" aria-label="รายการแถวที่ ' + (i + 1) + '" value="' + esc(r.item) + '"></td>' +
+        '<td><input class="cell num" id="g' + i + '-qty" data-c="qty" inputmode="decimal" aria-label="จำนวน" value="' + esc(r.qty) + '"></td>' +
+        '<td><input class="cell" id="g' + i + '-unit" data-c="unit" list="dl-units" aria-label="หน่วย" value="' + esc(r.unit) + '"></td>' +
+        '<td><input class="cell" id="g' + i + '-note" data-c="note" aria-label="หมายเหตุ" value="' + esc(r.note) + '"></td>' +
+        '<td><button class="x" type="button" aria-label="ลบแถวที่ ' + (i + 1) + '" title="ลบแถว">×</button></td></tr>';
+    });
+    grid.innerHTML = h;
+    if (focusId) {
+      var el = document.getElementById(focusId);
+      if (el) { el.focus(); if (caret != null) try { el.setSelectionRange(caret, caret); } catch (e) {} }
+    }
+  }
+  grid.addEventListener("input", function (e) {
+    var t = e.target, tr = t.closest("tr"); if (!tr || !t.dataset.c) return;
+    var i = +tr.dataset.i, r = st.items[i];
+    r[t.dataset.c] = t.value;
+    if (t.dataset.c === "item" && !r.unit && catalog[t.value.trim()]) {
+      r.unit = catalog[t.value.trim()];
+      var u = document.getElementById("g" + i + "-unit"); if (u) u.value = r.unit;
+    }
+    if (i === st.items.length - 1 && filled(r)) renderGrid(t.id, t.selectionStart);
+    save(); schedule();
+  });
+  grid.addEventListener("click", function (e) {
+    var b = e.target.closest(".x"); if (!b) return;
+    st.items.splice(+b.closest("tr").dataset.i, 1);
+    renderGrid(); save(); schedule();
+  });
+  grid.addEventListener("keydown", function (e) {
+    if (e.key !== "Enter") return;
+    var t = e.target, tr = t.closest("tr"); if (!tr || !t.dataset.c) return;
+    e.preventDefault();
+    var i = +tr.dataset.i;
+    if (i === st.items.length - 1) { st.items.push(normItem()); renderGrid(); }
+    var n = document.getElementById("g" + (i + 1) + "-" + t.dataset.c); if (n) n.focus();
+  });
+  // pasting several lines into any cell fills the following rows
+  grid.addEventListener("paste", function (e) {
+    var t = e.target, tr = t.closest && t.closest("tr"); if (!tr || !t.dataset.c) return;
+    var text = (e.clipboardData || window.clipboardData).getData("text");
+    if (!/[\n\t]/.test(text.replace(/\s+$/, ""))) return;
+    e.preventDefault();
+    var rows = parseBulk(text); if (!rows.length) return;
+    var i = +tr.dataset.i;
+    rows.forEach(function (r, j) {
+      var at = i + j;
+      if (at < st.items.length && !filled(st.items[at])) st.items[at] = r;
+      else if (at < st.items.length) st.items.splice(at, 0, r);
+      else st.items.push(r);
+    });
+    renderGrid("g" + (i + rows.length) + "-item"); save(); schedule();
+    toast("เพิ่ม " + rows.length + " รายการ");
+  });
+
+  document.getElementById("btn-add").addEventListener("click", function () {
+    var last = st.items[st.items.length - 1];
+    if (last && filled(last)) st.items.push(normItem());
+    renderGrid("g" + (st.items.length - 1) + "-item");
+  });
+  document.getElementById("btn-clear-items").addEventListener("click", function () {
+    if (!filledItems().length) return;
+    ask("ลบรายการทั้งหมด " + filledItems().length + " รายการ?", function () { st.items = []; renderGrid(); save(); schedule(); });
+  });
+
+  /* ================= bulk add ================= */
+  function parseBulk(text) {
+    var out = [];
+    text.replace(/\r/g, "").split("\n").forEach(function (line) {
+      if (!line.trim()) return;
+      var r = normItem();
+      if (line.indexOf("\t") >= 0) {
+        var c = line.split("\t").map(function (s) { return s.trim(); });
+        // drop a leading running-number column copied from a numbered sheet
+        if (c.length >= 3 && /^\d+\.?$/.test(c[0]) && !/^\d+([.,]\d+)?$/.test(c[1])) c.shift();
+        if (c.length >= 2 && !/^\d+([.,]\d+)?$/.test(c[1]) && /^\d+([.,]\d+)?\s*\S*$/.test(c[1])) {
+          var mm = c[1].match(/^(\d+(?:[.,]\d+)?)\s*(.*)$/); c.splice(1, 1, mm[1], mm[2]);
+        }
+        r.item = c[0] || ""; r.qty = c[1] || ""; r.unit = c[2] || ""; r.note = c.slice(3).join(" ");
+      } else {
+        var s = line.trim().replace(/^\d+[.)]\s+/, "");
+        var m = s.match(/^(.*?\S)\s+(?:จำนวน\s*)?(\d+(?:[.,]\d+)?)\s*([^\s\d][^\s]*)?\s*$/);
+        if (m) { r.item = m[1]; r.qty = m[2]; r.unit = m[3] || ""; } else r.item = s;
+      }
+      if (!r.unit && catalog[r.item]) r.unit = catalog[r.item];
+      if (filled(r)) out.push(r);
+    });
+    return out;
+  }
+  var bulk = document.getElementById("bulk"), bulkText = document.getElementById("bulk-text"), bulkFound = document.getElementById("bulk-found");
+  document.getElementById("btn-bulk").addEventListener("click", function () { bulk.hidden = !bulk.hidden; if (!bulk.hidden) bulkText.focus(); });
+  bulkText.addEventListener("input", function () {
+    var n = parseBulk(bulkText.value).length;
+    bulkFound.textContent = n ? "พบ " + n + " รายการ" : "ยังไม่มีรายการ";
+  });
+  document.getElementById("bulk-cancel").addEventListener("click", function () { bulk.hidden = true; });
+  document.getElementById("bulk-add").addEventListener("click", function () {
+    var rows = parseBulk(bulkText.value);
+    if (!rows.length) { toast("ยังไม่มีรายการให้เพิ่ม"); return; }
+    st.items = filledItems().concat(rows);
+    bulkText.value = ""; bulkFound.textContent = "ยังไม่มีรายการ"; bulk.hidden = true;
+    renderGrid(); save(); schedule();
+    toast("เพิ่ม " + rows.length + " รายการ");
+  });
+
+  /* ================= confirm + toast ================= */
+  var bar = document.getElementById("confirm"), onYes = null;
+  function ask(msg, fn) { document.getElementById("confirm-msg").textContent = msg; onYes = fn; bar.hidden = false; document.getElementById("confirm-no").focus(); }
+  document.getElementById("confirm-no").addEventListener("click", function () { bar.hidden = true; onYes = null; });
+  document.getElementById("confirm-yes").addEventListener("click", function () { bar.hidden = true; var f = onYes; onYes = null; if (f) f(); });
+  var toastEl = document.getElementById("toast"), toastT;
+  function toast(msg) { toastEl.textContent = msg; toastEl.hidden = false; clearTimeout(toastT); toastT = setTimeout(function () { toastEl.hidden = true; }, 2600); }
+
+  document.getElementById("btn-clear").addEventListener("click", function () {
+    ask("ล้างข้อมูลทั้งหมด (หัวกระดาษ รายการ และผู้ลงนาม)?", function () {
+      var keep = { font: st.font, size: st.size, perPage: st.perPage, autoSheet: st.autoSheet };
+      st = Object.assign(defaults(), keep); fillForm(); renderGrid(); save(); schedule();
+    });
+  });
+
+  var SAMPLE_ITEMS = [
+    ["กระดาษ A4 80 แกรม", "10", "รีม"], ["ปากกาลูกลื่น สีน้ำเงิน", "2", "กล่อง", "กล่องละ 50 ด้าม"], ["ปากกาลูกลื่น สีแดง", "1", "กล่อง"],
+    ["ปากกาไวท์บอร์ด สีดำ", "12", "ด้าม"], ["ปากกาไวท์บอร์ด สีน้ำเงิน", "12", "ด้าม"], ["ปากกาเน้นข้อความ", "6", "ด้าม"],
+    ["ดินสอดำ 2B", "2", "โหล"], ["ยางลบดินสอ", "12", "ก้อน"], ["ไม้บรรทัด 30 ซม.", "6", "อัน"], ["คลิปหนีบกระดาษ", "5", "กล่อง"],
+    ["ลวดเย็บกระดาษ เบอร์ 10", "10", "กล่อง"], ["เครื่องเย็บกระดาษ", "2", "เครื่อง"], ["แฟ้มสันกว้าง 3 นิ้ว", "10", "เล่ม"], ["แฟ้มซองพลาสติก", "20", "ซอง"],
+    ["เทปใส 1 นิ้ว", "6", "ม้วน"], ["กระดาษกาวย่น", "4", "ม้วน"], ["กาวลาเท็กซ์", "2", "ขวด"], ["กรรไกร 8 นิ้ว", "3", "อัน"],
+    ["คัตเตอร์ใหญ่", "3", "อัน"], ["ซองน้ำตาล A4", "50", "ซอง"], ["กระดาษโน้ตกาว", "10", "แพ็ค"], ["หมึกเครื่องพิมพ์ HP 682 สีดำ", "2", "ตลับ", "ห้อง ว.204"],
+    ["หมึกเครื่องพิมพ์ HP 682 สี", "1", "ตลับ", "ห้อง ว.204"], ["ถ่าน AA", "2", "แพ็ค"], ["กระดาษการ์ดสี A4", "2", "ห่อ"], ["แม็กเนติกบอร์ด", "1", "ชุด"]
+  ];
+  document.getElementById("btn-sample").addEventListener("click", function () {
+    var go = function () {
+      Object.assign(st, {
+        docno: "12/2569", name: "นางสาวสมใจ ใจดี", position: "ครู", level: "มัธยมศึกษาปีที่ 2",
+        reason: "ใช้ในการจัดการเรียนการสอนวิชาวิทยาศาสตร์ ภาคเรียนที่ 2 ปีการศึกษา 2569",
+        s_head: "นายประเสริฐ มั่นคง", s_officer: "นางวันเพ็ญ สุขสวัสดิ์", s_receiver: "นางสาวสมใจ ใจดี", s_chief: "นายสมชาย ทองดี",
+        items: SAMPLE_ITEMS.map(function (a) { return normItem({ item: a[0], qty: a[1], unit: a[2], note: a[3] }); })
+      });
+      fillForm(); renderGrid(); save(); schedule();
+    };
+    if (filledItems().length || st.name) ask("แทนที่ข้อมูลในฟอร์มด้วยข้อมูลตัวอย่าง?", go); else go();
+  });
+
+  /* ================= export + print ================= */
+  function fileName() {
+    var base = "ใบเบิกพัสดุ" + (st.docno.trim() ? " " + st.docno.trim() : "");
+    return base.replace(/[\\/:*?"<>|]+/g, "-") + ".docx";
+  }
+  document.getElementById("btn-docx").addEventListener("click", function () {
+    var bytes;
+    try { bytes = buildDocx(); } catch (err) { toast("สร้างไฟล์ไม่สำเร็จ: " + err.message); return; }
+    remember();
+    var blob = new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+    var name = fileName();
+    var plain = function () {
+      var a = document.createElement("a");
+      a.href = URL.createObjectURL(blob); a.download = name;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
+      toast("ดาวน์โหลด " + name);
+    };
+    if (window.claude && typeof window.claude.use === "function") {
+      window.claude.use("downloads").then(function (dl) {
+        if (!dl) { toast("หน้านี้บันทึกไฟล์ไม่ได้ ให้เปิดไฟล์ index.html ในเบราว์เซอร์แทน"); return; }
+        return dl.save({ filename: name, data: blob }).then(function () { toast("บันทึก " + name + " แล้ว"); }, function (err) {
+          if (err && err.code === "declined") toast("ยกเลิกการบันทึกไฟล์");
+          else if (err && err.code === "rate_limited") toast("มีหน้าต่างบันทึกไฟล์เปิดอยู่แล้ว");
+          else toast("บันทึกไฟล์ไม่สำเร็จ");
+        });
+      });
+    } else plain();
+  });
+
+  var inFrame = false;
+  try { inFrame = window.self !== window.top; } catch (e) { inFrame = true; }
+  if (!inFrame) {
+    var pb = document.getElementById("btn-print"); pb.hidden = false;
+    pb.addEventListener("click", function () { window.print(); });
+  }
+
+  // test hook: lets automated checks pull the generated file
+  window.__buildDocx = buildDocx;
+
+  /* ================= boot ================= */
+  load();
+  fillDatalist();
+  fillForm();
+  renderGrid();
+  var fontsReady = document.fonts && document.fonts.load
+    ? Promise.all([document.fonts.load("16pt THSN"), document.fonts.load("700 16pt THSN")]).catch(function () {})
+    : Promise.resolve();
+  fontsReady.then(renderPreview);
+})();
+</script>
