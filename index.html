@@ -75,11 +75,18 @@ body { margin: 0; background: var(--bg); color: var(--ink); font: 400 15px/1.5 v
 .btn.small { padding: 7px 10px; font-size: 13px; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
+/* confirmation sits fixed at the bottom so it is visible wherever the page is scrolled */
 .bar {
-  margin: 12px 16px 0; padding: 10px 14px; border-radius: 8px;
+  position: fixed; z-index: 30;
+  left: 50%; transform: translateX(-50%);
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  width: min(560px, calc(100% - 32px));
+  padding: 12px 14px; border-radius: 10px;
   display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
-  background: var(--surface); border: 1px solid var(--danger);
+  background: var(--surface); border: 1.5px solid var(--danger);
+  box-shadow: var(--shadow), 0 10px 40px rgba(0, 0, 0, .18);
 }
+.bar span { font-weight: 500; }
 .bar span { margin-right: auto; }
 .toast {
   position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
@@ -781,8 +788,8 @@ tr:hover .x, .x:focus-visible { opacity: 1; }
     renderGrid("g" + (st.items.length - 1) + "-item");
   });
   document.getElementById("btn-clear-items").addEventListener("click", function () {
-    if (!filledItems().length) return;
-    ask("ลบรายการทั้งหมด " + filledItems().length + " รายการ?", function () { st.items = []; renderGrid(); save(); schedule(); });
+    if (!filledItems().length) { toast("ยังไม่มีรายการให้ลบ"); return; }
+    ask("ลบรายการทั้งหมด " + filledItems().length + " รายการ?", function () { st.items = []; renderGrid(); save(); schedule(); toast("ลบรายการทั้งหมดแล้ว"); });
   });
 
   /* ================= bulk add ================= */
@@ -827,8 +834,9 @@ tr:hover .x, .x:focus-visible { opacity: 1; }
 
   /* ================= confirm + toast ================= */
   var bar = document.getElementById("confirm"), onYes = null;
-  function ask(msg, fn) { document.getElementById("confirm-msg").textContent = msg; onYes = fn; bar.hidden = false; document.getElementById("confirm-no").focus(); }
+  function ask(msg, fn) { document.getElementById("confirm-msg").textContent = msg; onYes = fn; bar.hidden = false; document.getElementById("confirm-yes").focus({ preventScroll: true }); }
   document.getElementById("confirm-no").addEventListener("click", function () { bar.hidden = true; onYes = null; });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape" && !bar.hidden) { bar.hidden = true; onYes = null; } });
   document.getElementById("confirm-yes").addEventListener("click", function () { bar.hidden = true; var f = onYes; onYes = null; if (f) f(); });
   var toastEl = document.getElementById("toast"), toastT;
   function toast(msg) { toastEl.textContent = msg; toastEl.hidden = false; clearTimeout(toastT); toastT = setTimeout(function () { toastEl.hidden = true; }, 2600); }
